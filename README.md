@@ -1,14 +1,16 @@
-# Welcome to your CDK TypeScript project
+# EKS Testing
 
-This is a blank project for TypeScript development with CDK.
+Just a tiny CDK project to reproduce an issue with eksctl. To reproduce:
 
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
+```shell
+# Create the EKS cluster using the CDK (not eksctl). You need to pass EKSCTL_ROLE_ARN
+# because eksctl uses your current role to talk to the control plane, but the CDK by
+# default creates a role that you first need to assume to communicate with the control plane
+EKSCTL_ROLE_ARN= "..arn for role you use to invoke eksctl..." cdk deploy
 
-## Useful commands
+# Generate the cluster config for eskctl
+./bin/generate-cluster-config > cluster.yml
 
-* `npm run build`   compile typescript to js
-* `npm run watch`   watch for changes and compile
-* `npm run test`    perform the jest unit tests
-* `cdk deploy`      deploy this stack to your default AWS account/region
-* `cdk diff`        compare deployed stack with current state
-* `cdk synth`       emits the synthesized CloudFormation template
+# Create the managed node group
+eksctl create nodegroup -f cluster.yml
+```

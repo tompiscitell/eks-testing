@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+CLUSTER_NAME=$(aws cloudformation describe-stacks --stack-name EksTestingStack | jq -r '.Stacks[0].Outputs[]|select(.OutputKey | contains("ClusterName")) | .OutputValue')
+CONTROL_PLANE_SG=$(aws cloudformation describe-stacks --stack-name EksTestingStack | jq -r '.Stacks[0].Outputs[]|select(.OutputKey | contains("ControlPlaneSG")) | .OutputValue')
+
+get_public_subnet_mapping() {
+  aws ec2 describe-subnets --subnet-ids $(eksctl get cluster $CLUSTER_NAME -o json | jq -r '.[0].ResourcesVpcConfig.SubnetIds|.[]' | xargs) \
+  | jq -r '.Subnets|map(select(.MapPublicIpOnLaunch)) | map({(.AvailabilityZone): {id: .SubnetId}}) | add' \
+  | ruby -ryaml -rjson -e 'puts YAML.dump(JSON.load(ARGF))' 2>/dev/null \
+  | tail -n +2 \
+  | sed 's/^/      /'
+}
+
+get_private_subnet_mapping() {
+  aws ec2 describe-subnets --subnet-ids $(eksctl get cluster $CLUSTER_NAME -o json | jq -r '.[0].ResourcesVpcConfig.SubnetIds|.[]' | xargs) \
+  | jq -r '.Subnets|map(select(.MapPublicIpOnLaunch==false)) | map({(.AvailabilityZone): {id: .SubnetId}}) | add' \
+  | ruby -ryaml -rjson -e 'puts YAML.dump(JSON.load(ARGF))' 2>/dev/null \
+  | tail -n +2 \
+  | sed 's/^/      /'
+}
+
+
+get_vpc_id() {
+  eksctl get cluster $CLUSTER_NAME -o json | jq -r '.[0].ResourcesVpcConfig.VpcId'
+}
+
+
+cat <<HEREDOC
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: $CLUSTER_NAME
+  region: us-west-2
+
+vpc:
+  id: $(get_vpc_id)
+  securityGroup: $CONTROL_PLANE_SG
+  subnets:
+    public:
+$(get_public_subnet_mapping)
+    private:
+$(get_private_subnet_mapping)
+managedNodeGroups:
+  - name: workers
+    amiFamily: Bottlerocket
+    privateNetworking: true
+    desiredCapacity: 1
+HEREDOC
