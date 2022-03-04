@@ -13,4 +13,7 @@ EKSCTL_ROLE_ARN= "..arn for role you use to invoke eksctl..." cdk deploy
 
 # Create the managed node group
 eksctl create nodegroup -f cluster.yml
+
+# Check the attached security groups
+./bin/get-worker-sgs
 ```
